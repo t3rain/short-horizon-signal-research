@@ -1,0 +1,14 @@
+*.exe
+*.out
+
+data/
+build/
+cmake-build-*/
+.venv/
+
+*.o
+*.obj
+*.dll
+*.pdb
+
+.vscode/

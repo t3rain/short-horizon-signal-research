@@ -32,7 +32,7 @@ COLS = {
 }
 
 
-# ----------------------------------------------------------------- download
+# download
 def daterange(start: dt.date, end: dt.date):
     d = start
     while d <= end:
@@ -137,7 +137,7 @@ def cmd_download(args) -> None:
                 chk_path.unlink(missing_ok=True)
 
 
-# ------------------------------------------------------------------ inspect
+# inspect
 def ts_divisor(lf: pl.LazyFrame) -> tuple[str, int]:
     first = lf.select(pl.col("transaction_time").first()).collect().item()
     digits = len(str(int(first)))
