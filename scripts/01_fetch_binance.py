@@ -51,11 +51,13 @@ def http_get(url: str, dest: Path) -> bool:
         with urllib.request.urlopen(req, timeout=60) as r, open(dest, "wb") as f:
             total = int(r.headers.get("Content-Length", 0))
             done = 0
+            # Read 1 MB at a time. The := operator assigns and tests, which means an 
+            # empty bytes object will stop execution. Never holds the whole file in memory.
             while chunk := r.read(1 << 20):
                 f.write(chunk)
                 done += len(chunk)
                 if total:
-                    print(f"\r  {done/1e6:8.1f} / {total/1e6:.1f} MB", end="")
+                    print(f"\r  {done/1e6:8.1f} / {total/1e6:.1f} MB", end="")  # progress counter with \r so line overwrites itself
             print()
         return True
     except urllib.error.HTTPError as e:
@@ -63,7 +65,7 @@ def http_get(url: str, dest: Path) -> bool:
             return False
         raise
 
-
+# hash by 1 MB chunks to compare with checksum
 def sha256(path: Path) -> str:
     h = hashlib.sha256()
     with open(path, "rb") as f:
@@ -87,11 +89,14 @@ def zip_to_parquet(zip_path: Path, kind: str, out_path: Path) -> None:
         if ncols != len(COLS[kind]):
             raise ValueError(f"{kind}: expected {len(COLS[kind])} columns, "
                              f"found {ncols} ({first!r})")
+        # polars lazy scan, new_columns renames the columns
         # Look at many rows before fixing column types, so a size like "5" early
         # in the file is not locked in as an integer when "5.123" appears later.
         lf = pl.scan_csv(csv_path, has_header=has_header, new_columns=COLS[kind],
                          infer_schema_length=100_000)
-        lf.sink_parquet(out_path, compression="zstd")
+        # streams the CSV in chunks to write compressed parquet
+        # uses zstandard compression algorithm 
+        lf.sink_parquet(out_path, compression="zstd")   # calling collect here would load the entire CSV into RAM
     finally:
         if csv_path is not None and csv_path.exists():
             csv_path.unlink()
@@ -119,6 +124,7 @@ def cmd_download(args) -> None:
                 print(f"[miss] not published (404): {stem}")
                 continue
             if http_get(url + ".CHECKSUM", chk_path):
+                # pull the hash out of the checksum file
                 expected = chk_path.read_text().split()[0].lower()
                 actual = sha256(zip_path)
                 if expected != actual:
@@ -137,7 +143,7 @@ def cmd_download(args) -> None:
                 chk_path.unlink(missing_ok=True)
 
 
-# inspect
+# fetch timestamp unit 
 def ts_divisor(lf: pl.LazyFrame) -> tuple[str, int]:
     first = lf.select(pl.col("transaction_time").first()).collect().item()
     digits = len(str(int(first)))
@@ -156,6 +162,9 @@ def inspect_book(path: Path) -> None:
     print(f"rows: {n:,}   timestamp unit: {unit}")
     print(lf.head(5).collect())
 
+    # group by transaction times into a new group "sec", with a len for each group
+    # and then collects these as a series in per_sec
+    # MOTE: only seconds with an update will be present in per_sec
     per_sec = (lf.group_by((pl.col("transaction_time") // div).alias("sec"))
                  .len().collect()["len"])
     print(f"\nupdates per second: median {per_sec.median():.0f}, "
@@ -170,6 +179,8 @@ def inspect_book(path: Path) -> None:
     print(f"\ncrossed/locked books (bid >= ask): {crossed:,}")
     print(f"rows with a non-positive best size: {zero:,}")
 
+    # finds diff between consecutive rows 
+    # finds out of order rows, if any, and prints
     dts = lf.select(pl.col("transaction_time").diff().alias("dt")).collect()["dt"]
     to_s = div
     print(f"out-of-order transaction_time rows: {(dts < 0).sum():,}")
@@ -180,10 +191,13 @@ def inspect_book(path: Path) -> None:
     print(f"event_time - transaction_time (ms): median {lag.median():.1f}, "
           f"p99 {lag.quantile(0.99):.1f}, max {lag.max():.1f}")
 
-    spread = (lf.select((pl.col("best_ask_price") - pl.col("best_bid_price"))
-                        .round(4).alias("spread"))
-                .group_by("spread").len().sort("len", descending=True)
-                .head(5).collect())
+    
+    spread = (lf.group_by((pl.col("best_ask_price") - pl.col("best_bid_price"))
+                      .round(4).alias("spread"))
+            .len()
+            .sort("len", descending=True)
+            .head(5)
+            .collect())
     print("\nmost common spreads (price units):")
     print(spread)
 
