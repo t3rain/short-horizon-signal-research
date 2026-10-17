@@ -1,0 +1,23 @@
+# Install with
+#   python -m venv .venv
+#   .venv\Scripts\activate          (Windows)   |   source .venv/bin/activate   (Linux/macOS)
+#   pip install -r requirements.txt
+
+# --- data handling (the Binance files are large: polars streams them) ---
+polars>=1.0
+pyarrow>=15.0          # parquet interop between polars and pandas
+numpy>=1.26
+pandas>=2.0
+
+# --- statistics and models ---
+scipy>=1.11            # Spearman IC, t-tests
+scikit-learn>=1.4      # ridge, metrics, baselines
+lightgbm>=4.0          # gradient boosting
+
+# --- plotting and notebooks ---
+matplotlib>=3.8
+jupyterlab>=4.0
+
+# --- quality ---
+pytest>=8.0            # feature, validation and leakage tests
+tqdm>=4.66             # progress bars for long loops
