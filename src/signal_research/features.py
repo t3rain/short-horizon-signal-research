@@ -1,6 +1,6 @@
 """Per-second feature table from raw Binance bookTicker + aggTrades events.
 
-Conventions (read these before changing anything):
+Conventions:
 
   * One row per second of a UTC day. Row i is labelled with its END time
     t_i = day_start + (i + 1) seconds, so the row covers the window [t_i - 1 s, t_i).
@@ -112,7 +112,7 @@ def build_features(
     end_ms = grid_end_times(day_start_ms, n_rows)
     cols: dict[str, np.ndarray] = {"t_end_ms": end_ms}
 
-    # state: last book update strictly before each row's end time
+    # get index before each end timestamps
     idx = last_event_before(book_ts_ms, end_ms)
     ok = idx >= 0
     j = np.where(ok, idx, 0)
@@ -120,11 +120,13 @@ def build_features(
     def pick(a: np.ndarray) -> np.ndarray:
         return np.where(ok, a[j], np.nan)
 
+    # find values at each last_event_before indices
     b, a = pick(bid_px), pick(ask_px)
     bq, aq = pick(bid_qty), pick(ask_qty)
     mid = (b + a) / 2.0
     micro = (b * aq + a * bq) / (bq + aq)
 
+    # only concern at this point is the values at last_event_before indices
     cols["bid_px"] = b
     cols["ask_px"] = a
     cols["mid"] = mid

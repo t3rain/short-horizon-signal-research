@@ -13,9 +13,9 @@ TICK = 1.0
 N_ROWS = 20
 
 
-# ------------------------------------------------------------------ small helpers
+# small helpers
+# OFI of one update
 def ofi(prev, cur):
-    """OFI of one update. prev/cur = (bid_px, bid_qty, ask_px, ask_qty)."""
     pb, pbq, pa, paq = prev
     cb, cbq, ca, caq = cur
     return F.ofi_per_event(
@@ -23,9 +23,9 @@ def ofi(prev, cur):
         F.to_ticks(np.array([pa, ca]), TICK), np.array([paq, caq], dtype=float),
     )[1]
 
-
+# sorted ms timestamps
+# 25% sit on second boundary to exercise tie handling
 def random_times(rng, n, n_rows):
-    """Sorted ms timestamps; ~25 % sit exactly on a second boundary to exercise tie handling."""
     t = rng.integers(0, n_rows * 1000, size=n)
     snap = rng.random(n) < 0.25
     t[snap] = (t[snap] // 1000) * 1000
@@ -53,19 +53,12 @@ def run(book, trades, n_rows=N_ROWS):
                             flow_windows_s=(1, 5), ret_windows_s=(1, 5))
 
 
-# ----------------------------------------------------------------- 1. hand-made cases
 def test_ofi_each_case():
-    # bid up to a new level with size 3 (ask unchanged): +3
     assert ofi((100, 5, 102, 4), (101, 3, 102, 4)) == 3
-    # bid same price, size 5 -> 8: +3
     assert ofi((100, 5, 102, 4), (100, 8, 102, 4)) == 3
-    # bid down: the old bid size 5 disappeared: -5
     assert ofi((100, 5, 102, 4), (99, 7, 102, 4)) == -5
-    # ask improves (down) with size 2: -2
     assert ofi((100, 5, 102, 4), (100, 5, 101, 2)) == -2
-    # ask same price, size 4 -> 1 (sellers pulled back): +3
     assert ofi((100, 5, 102, 4), (100, 5, 102, 1)) == 3
-    # ask up: the old ask size 4 disappeared: +4
     assert ofi((100, 5, 102, 4), (100, 5, 103, 9)) == 4
 
 
@@ -88,16 +81,12 @@ def test_trailing_sum():
 
 
 def test_state_forward_fill_and_boundaries():
-    # events at 500 ms and 1500 ms; nothing afterwards
     book = (np.array([500, 1500]), np.array([100.0, 102.0]), np.array([1.0, 1.0]),
             np.array([101.0, 103.0]), np.array([1.0, 1.0]))
     trades = (np.array([], dtype=np.int64), np.array([]), np.array([], dtype=bool))
     f = run(book, trades, n_rows=4)
-    # row 0 ends at 1000 ms -> uses the event at 500
-    assert f["bid_px"][0] == 100.0
-    # row 1 ends at 2000 ms -> uses the event at 1500
-    assert f["bid_px"][1] == 102.0
-    # rows 2, 3 have no new events: forward fill
+    assert f["bid_px"][0] == 100.0  # row 0 uses bid at 500 ms
+    assert f["bid_px"][1] == 102.0  # row 1 (ends at 2000 ms) uses bid at 1500 ms
     assert f["bid_px"][2] == f["bid_px"][3] == 102.0
 
 
@@ -120,14 +109,13 @@ def test_no_state_before_first_event_is_nan():
 
 
 def test_microprice_and_imbalance():
-    # bid 100 (size 1), ask 101 (size 3): thin bid, heavy ask -> sell pressure
     book = (np.array([100]), np.array([100.0]), np.array([1.0]),
             np.array([101.0]), np.array([3.0]))
     trades = (np.array([], dtype=np.int64), np.array([]), np.array([], dtype=bool))
     f = run(book, trades, n_rows=2)
     assert f["mid"][0] == 100.5
     assert f["imbalance"][0] == pytest.approx(-0.5)
-    micro = (100.0 * 3 + 101.0 * 1) / 4          # 100.25, below the mid
+    micro = (100.0 * 3 + 101.0 * 1) / 4         
     assert f["micro_dev_bps"][0] == pytest.approx((micro - 100.5) / 100.5 * 1e4)
     assert f["spread_ticks"][0] == 1.0
 
@@ -135,7 +123,8 @@ def test_microprice_and_imbalance():
 def test_trade_sign_convention():
     book = (np.array([0]), np.array([100.0]), np.array([1.0]),
             np.array([101.0]), np.array([1.0]))
-    # buyer_maker=False -> buyer was the aggressor (+); True -> seller aggressor (-)
+    # buyer_maker=False -> bid crossed to a resting ask -> buying pressure
+    # True -> ask crossed to a resting bid -> selling pressure
     trades = (np.array([100, 200, 1100]), np.array([2.0, 3.0, 4.0]),
               np.array([False, True, True]))
     f = run(book, trades, n_rows=3)
@@ -144,7 +133,7 @@ def test_trade_sign_convention():
     assert f["tvol_1s"][0] == 5.0
 
 
-# ----------------------------------------------------------- 2. naive reference check
+# naive reference check
 def naive_event(prev, cur):
     pb, qb, pa, qa = prev
     cb, cqb, ca, cqa = cur
@@ -211,10 +200,8 @@ def test_vectorised_matches_naive_loops(seed):
         np.testing.assert_allclose(got[name], expected, rtol=1e-9, atol=1e-9,
                                    equal_nan=True, err_msg=name)
 
-
-# ------------------------------------------------------- 3. perturbation (no look-ahead)
+# replace every value of events with ts >= cutoff by random junk (timestamps kept).
 def _scramble_from(arrays, ts, cutoff, rng):
-    """Replace every value of events with ts >= cutoff by random junk (timestamps kept)."""
     late = ts >= cutoff
     out = []
     for a in arrays:
@@ -226,14 +213,14 @@ def _scramble_from(arrays, ts, cutoff, rng):
         out.append(a)
     return out
 
-
+# events changed after t must not affect values till t
 @pytest.mark.parametrize("seed", range(10))
-def test_events_at_or_after_t_never_change_rows_up_to_t(seed):
+def test_future_has_no_effect(seed):
     rng = np.random.default_rng(100 + seed)
     book, trades = make_stream(rng)
     base = run(book, trades)
     i0 = 10
-    cutoff = int(F.grid_end_times(0, N_ROWS)[i0])      # end time of row i0
+    cutoff = int(F.grid_end_times(0, N_ROWS)[i0]) 
 
     ts, bp, bq, ap, aq = book
     tts, tq, tm = trades
@@ -245,9 +232,8 @@ def test_events_at_or_after_t_never_change_rows_up_to_t(seed):
         np.testing.assert_allclose(changed[name][: i0 + 1], base[name][: i0 + 1],
                                    equal_nan=True, err_msg=f"look-ahead in {name}")
 
-
-def test_perturbation_test_has_teeth():
-    """Positive control: changing events BEFORE t must show up, else the test above proves nothing."""
+# events changed before t must affect values at t
+def test_past_has_effect():
     rng = np.random.default_rng(7)
     book, trades = make_stream(rng, n_events=600)
     base = run(book, trades)
@@ -259,4 +245,4 @@ def test_perturbation_test_has_teeth():
     bq2 = bq.copy()
     bq2[window] += 7
     changed = run((ts, bp, bq2, ap, aq), trades)
-    assert not np.allclose(changed["imbalance"][i0], base["imbalance"][i0])
+    assert not np.allclose(changed["imbalance"][i0], base["imbalance"][i0])     # check any

@@ -8,7 +8,7 @@ For the row labelled t (row index i), with latency L and horizon h, both in whol
 
 mid[i] is the book state just before row i's end time, so mid[i + L] is the book as it
 stands when an order sent at t arrives. L = 0 is the optimistic zero-latency case.
-Rows whose exit lies beyond the end of the day get NaN (drop them, never fill them).
+Rows whose exit lies beyond the end of the day get NaN.
 """
 
 import numpy as np

@@ -4,26 +4,25 @@ import pytest
 from signal_research.labels import forward_mid_return_bps, make_labels
 
 
-def test_label_uses_entry_at_i_plus_L_and_exit_at_i_plus_L_plus_h():
+def test_label_entry_exit_correct():
     mid = np.array([100.0, 101.0, 102.0, 103.0, 104.0, 105.0])
     L, h = 1, 2
     y = forward_mid_return_bps(mid, h, L)
     for i in range(len(mid) - L - h):
         assert y[i] == pytest.approx((mid[i + L + h] / mid[i + L] - 1) * 1e4)
-    # the last L + h rows have no exit price yet
     assert np.isnan(y[-(L + h):]).all()
     assert not np.isnan(y[: -(L + h)]).any()
 
 
-def test_zero_latency_enters_at_the_row_state():
+def test_zero_latency():
     mid = np.array([100.0, 110.0, 121.0])
     y = forward_mid_return_bps(mid, 1, 0)
-    assert y[0] == pytest.approx(1000.0)          # +10 % = 1000 bps
+    assert y[0] == pytest.approx(1000.0)
     assert y[1] == pytest.approx(1000.0)
     assert np.isnan(y[2])
 
 
-def test_label_ignores_everything_before_entry():
+def test_label_ignores_before_entry():
     mid = np.array([100.0, 100.0, 100.0, 100.0, 100.0])
     a = forward_mid_return_bps(mid, 1, 2)
     mid2 = mid.copy()
