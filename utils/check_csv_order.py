@@ -1,8 +1,8 @@
 """Is the row disorder in Binance's own file, or did OUR conversion cause it?
  
-    python scripts/check_csv_order.py --date 2024-02-05                     # bookTicker
-    python scripts/check_csv_order.py --date 2024-02-05 --kind aggTrades
-    python scripts/check_csv_order.py --date 2024-02-03                     # a clean day, for contrast
+    python utils/check_csv_order.py --date 2024-02-05                     # bookTicker
+    python utils/check_csv_order.py --date 2024-02-05 --kind aggTrades
+    python utils/check_csv_order.py --date 2024-02-03                     # a clean day, for contrast
  
 What it does (pure Python for the CSV part, so no polars tricks can reorder anything):
   1. downloads the daily zip into data/check/ (checksum verified), unless already there
@@ -12,8 +12,8 @@ What it does (pure Python for the CSV part, so no polars tricks can reorder anyt
      in the CSV and in the parquet (first rows + a regular sample through the whole file)
  
 Verdict:
-  CSV itself out of order            -> Binance's file is built that way (not our bug)
-  CSV in order, parquet not matching -> our CSV -> parquet conversion reordered rows
+  CSV itself out of order            -> Binance's file is built that way
+  CSV in order, parquet not matching -> parquet conversion reordered rows
   both in order and matching         -> nothing wrong with this day
 """
 import argparse

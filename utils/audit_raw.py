@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Scan the raw parquet days for ordering / coverage problems.
 
-    python scripts/audit_raw.py                                  # every day found
-    python scripts/audit_raw.py --start 2024-01-01 --end 2024-03-30
-    python scripts/audit_raw.py --all --csv audit.csv            # show every day, save a CSV
+    python utils/audit_raw.py                                  # every day found
+    python utils/audit_raw.py --start 2024-01-01 --end 2024-03-30
+    python utils/audit_raw.py --all --csv audit.csv            # show every day, save a CSV
 
 For each (day, dataset) it reports:
     back_steps   how many times transaction_time goes BACKWARDS (row n < row n-1)
@@ -12,7 +12,7 @@ For each (day, dataset) it reports:
     outside      rows whose timestamp is not inside that UTC day
     span_h       hours between the first and last timestamp (~24 for a full day)
 
-By default only days with a problem are printed. Needs only polars.
+Prints days with ordering problems only.
 """
 import argparse
 import datetime as dt
