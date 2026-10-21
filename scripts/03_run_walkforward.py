@@ -21,6 +21,7 @@ is a fair question. Single features are scored raw (rank-based, so no fitting at
 import argparse
 import datetime as dt
 from pathlib import Path
+import json
 
 import numpy as np
 import pandas as pd
@@ -180,8 +181,16 @@ def main() -> None:
                    max_train_days=args.max_train_days, purge_rows=args.purge_s,
                    select_by=args.select_by,
                    clip_q=args.clip_q if args.clip_q > 0 else None)
-    analyse(dates, cols_by_day, cfg, tuple(args.horizons), args.latency,
-            Path(args.out) if args.out else root / "walkforward")
+
+    # default path is for runs with L=1s, IC selection -> data/walkforward
+    out_dir = Path(args.out) if args.out else root / "walkforward"  
+    analyse(dates, cols_by_day, cfg, tuple(args.horizons), args.latency, out_dir)
+
+    # record folder metadata
+    info = {**vars(args), "rhos": list(cfg.rhos), "first day": dates[0], "last day": dates[-1],
+            "n_days": len(dates), "created": dt.datetime.now().isoformat(timespec= "seconds")}
+    (out_dir / "run_config.json").write_text(json.dumps(info, indent=2))
+
 
 
 if __name__ == "__main__":
