@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Scan the raw parquet days for ordering / coverage problems.
 
     python utils/audit_raw.py                                  # every day found

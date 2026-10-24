@@ -28,11 +28,11 @@ import pandas as pd
 import polars as pl
 
 from signal_research import config
+from signal_research.dataset import find_days, load_columns
 from signal_research.labels import make_labels
 from signal_research.metrics import summarize_daily_ic
 from signal_research.walkforward import WFConfig, walk_forward
 
-NOT_FEATURES = {"t_end_ms", "bid_px", "ask_px", "mid"}    # same set as 02_build_features.py
 BASELINE = "imbalance"                                     # declared in advance
 TOP_FEATURES_SHOWN = 5
 
@@ -175,7 +175,8 @@ def main() -> None:
     if len(days) <= args.min_train_days:
         raise SystemExit(f"found {len(days)} feature days; need more than "
                          f"--min-train-days={args.min_train_days}")
-    dates, cols_by_day = load_days(days)
+    dates = [d for d, _ in days]
+    cols_by_day = load_columns(days)
     warn_if_gaps(dates)
     cfg = WFConfig(min_train_days=args.min_train_days, val_days=args.val_days,
                    max_train_days=args.max_train_days, purge_rows=args.purge_s,
