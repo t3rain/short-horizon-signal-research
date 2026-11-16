@@ -11,53 +11,28 @@ Writes  data/walkforward/daily_ic.csv      one IC per (signal, horizon, test day
         data/walkforward/preds_ridge.npz   out-of-sample predictions (for the PnL step)
 
 How it works (see signal_research/walkforward.py): for each test day t, ridge is fitted on
-days before t only (rho chosen on the last few of those days by validation squared error),
-then scored on day t with IC. The
-result is one IC per test day; we report the mean and its t-statistic across days.
+days before t only (rho chosen on the last few of those days by validation IC), then scored
+on day t with IC. The result is one IC per test day; we report the mean and its t-statistic
+across days.
 
 BASELINE is declared here, before any results were looked at, so that "does ridge beat it?"
 is a fair question. Single features are scored raw (rank-based, so no fitting at all).
 """
 import argparse
 import datetime as dt
-from pathlib import Path
 import json
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import polars as pl
 
 from signal_research import config
-from signal_research.dataset import find_days, load_columns
-from signal_research.labels import make_labels
+from signal_research.dataset import build_xy, find_days, load_columns
 from signal_research.metrics import summarize_daily_ic
 from signal_research.walkforward import WFConfig, walk_forward
 
 BASELINE = "imbalance"                                     # declared in advance
 TOP_FEATURES_SHOWN = 5
-
-
-def find_days(root: Path, symbol: str, start: str | None, end: str | None) -> list[tuple[str, Path]]:
-    prefix = f"{symbol}-features-"
-    found = []
-    for p in sorted((root / "features").glob(f"{prefix}*.parquet")):
-        date = p.stem[len(prefix):]
-        if start and date < start:
-            continue
-        if end and date > end:
-            continue
-        found.append((date, p))
-    return found
-
-
-def load_days(days: list[tuple[str, Path]]) -> tuple[list[str], dict[str, np.ndarray]]:
-    out = []
-    for i, (date, path) in enumerate(days, 1):
-        print(f"\r  loading [{i}/{len(days)}] {date}", end="", flush=True)
-        df = pl.read_parquet(path)
-        out.append({c: df[c].to_numpy() for c in df.columns})
-    print()
-    return [d for d, _ in days], out
 
 
 def warn_if_gaps(dates: list[str]) -> None:
@@ -73,15 +48,9 @@ def warn_if_gaps(dates: list[str]) -> None:
 # walk-forward harness: labels, walk-froward, tables, saving, summary display
 def analyse(dates: list[str], cols_by_day: list[dict[str, np.ndarray]], cfg: WFConfig,
             horizons: tuple[int, ...], latency_s: int, out_dir: Path | None) -> pd.DataFrame:
-    feature_cols = [c for c in cols_by_day[0] if c not in NOT_FEATURES]
+    feature_cols, X_days, Y_days = build_xy(cols_by_day, horizons, latency_s)
     print(f"{len(dates)} days, {len(feature_cols)} features, horizons {horizons} s, "
           f"latency {latency_s} s")
-
-    X_days, Y_days = [], []
-    for cols in cols_by_day:
-        X_days.append(np.column_stack([cols[c] for c in feature_cols]).astype(np.float32))
-        labels = make_labels(cols["mid"], horizons, latency_s)
-        Y_days.append(np.column_stack([labels[h] for h in horizons]).astype(np.float64))
 
     n_folds = len(dates) - cfg.min_train_days
     print(f"walk-forward: {n_folds} test days "

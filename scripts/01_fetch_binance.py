@@ -2,9 +2,9 @@
 them to compressed parquet, and sanity-check them.
 
 Usage (start with ONE day, inspect it, then fetch the rest):
-    python 01_fetch_binance.py download --start 2026-10-09 --end 2026-10-09
-    python 01_fetch_binance.py inspect  --date 2026-10-09
-    python 01_fetch_binance.py download --start 2026-10-03 --end 2026-10-09
+    python scripts/01_fetch_binance.py download --start 2024-01-01 --end 2024-01-01
+    python scripts/01_fetch_binance.py inspect  --date 2024-01-01
+    python scripts/01_fetch_binance.py download --start 2024-01-02 --end 2024-03-30
 
 Output:    data/parquet/BTCUSDT-bookTicker-YYYY-MM-DD.parquet (and aggTrades)
 """

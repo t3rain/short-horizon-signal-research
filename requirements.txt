@@ -11,8 +11,7 @@ pandas>=2.0
 
 # --- statistics and models ---
 scipy>=1.11            # Spearman IC, t-tests
-scikit-learn>=1.4      # ridge, metrics, baselines
-lightgbm>=4.0          # gradient boosting
+scikit-learn>=1.4      # cross-checks the closed-form ridge in the tests
 
 # --- plotting and notebooks ---
 matplotlib>=3.8
