@@ -1,4 +1,6 @@
 """Loading the per-day feature files and turning them into model inputs X and labels Y.
+
+Shared by the walk-forward script (03) and the costs and PnL script (04).
 """
 
 from pathlib import Path

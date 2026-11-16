@@ -88,9 +88,9 @@ def zip_to_parquet(zip_path: Path, kind: str, out_path: Path) -> None:
         if ncols != len(COLS[kind]):
             raise ValueError(f"{kind}: expected {len(COLS[kind])} columns, "
                              f"found {ncols} ({first!r})")
+        
         # polars lazy scan, new_columns renames the columns
-        # Look at many rows before fixing column types, so a size like "5" early
-        # in the file is not locked in as an integer when "5.123" appears later.
+        # look at many rows before fixing column types
         lf = pl.scan_csv(csv_path, has_header=has_header, new_columns=COLS[kind],
                          infer_schema_length=100_000)
         # streams the CSV in chunks to write compressed parquet
